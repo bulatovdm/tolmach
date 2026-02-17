@@ -74,7 +74,6 @@ describe("CacheManager", () => {
   it("returns undefined for corrupted cache", async () => {
     storedFiles.set("/tmp/cache/somefile.json", "not valid json {{{");
 
-    // We need to find the actual key, so let's just test the flow
     vi.mocked(mockFs.exists).mockResolvedValue(true);
     vi.mocked(mockFs.readFile).mockResolvedValue(ok("not valid json {{{"));
 

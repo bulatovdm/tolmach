@@ -220,4 +220,47 @@ describe("WhisperTranscriber", () => {
     const args = call?.[1] as string[];
     expect(args).not.toContain("-l");
   });
+
+  it("resolves model name to ggml path using modelDir", async () => {
+    vi.mocked(processRunner.runWithProgress).mockResolvedValue(
+      ok({ stdout: "", stderr: "", exitCode: 0 }),
+    );
+    vi.mocked(filesystemManager.exists).mockResolvedValue(true);
+    vi.mocked(filesystemManager.readFile).mockResolvedValue(
+      ok(WHISPER_JSON) as Result<string, FilesystemError>,
+    );
+
+    await transcriber.transcribe(
+      "/tmp/audio.wav",
+      { model: "large-v3-turbo", language: "auto", outputDir: "/tmp", modelDir: "/home/user/models" },
+      vi.fn(),
+    );
+
+    const call = vi.mocked(processRunner.runWithProgress).mock.calls[0];
+    const args = call?.[1] as string[];
+    expect(args).toContain("-m");
+    const mIndex = args.indexOf("-m");
+    expect(args[mIndex + 1]).toBe("/home/user/models/ggml-large-v3-turbo.bin");
+  });
+
+  it("uses absolute model path as-is", async () => {
+    vi.mocked(processRunner.runWithProgress).mockResolvedValue(
+      ok({ stdout: "", stderr: "", exitCode: 0 }),
+    );
+    vi.mocked(filesystemManager.exists).mockResolvedValue(true);
+    vi.mocked(filesystemManager.readFile).mockResolvedValue(
+      ok(WHISPER_JSON) as Result<string, FilesystemError>,
+    );
+
+    await transcriber.transcribe(
+      "/tmp/audio.wav",
+      { model: "/custom/path/ggml-large-v3-turbo.bin", language: "auto", outputDir: "/tmp" },
+      vi.fn(),
+    );
+
+    const call = vi.mocked(processRunner.runWithProgress).mock.calls[0];
+    const args = call?.[1] as string[];
+    const mIndex = args.indexOf("-m");
+    expect(args[mIndex + 1]).toBe("/custom/path/ggml-large-v3-turbo.bin");
+  });
 });

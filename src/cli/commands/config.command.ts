@@ -28,7 +28,6 @@ export async function configSetCommand(key: string, value: string): Promise<void
   const update: Record<string, unknown> = {};
   const sectionObj: Record<string, unknown> = {};
 
-  // Parse value
   let parsedValue: unknown = value;
   if (value === "true") parsedValue = true;
   else if (value === "false") parsedValue = false;

@@ -7,6 +7,7 @@ export interface TranscriptionOptions {
   readonly model: string;
   readonly language: string;
   readonly outputDir: string;
+  readonly modelDir?: string | undefined;
 }
 
 export interface Transcriber {

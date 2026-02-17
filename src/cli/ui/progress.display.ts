@@ -22,6 +22,7 @@ const STAGE_LABELS: Record<string, string> = {
 export class ProgressDisplay {
   private spinner: Ora;
   private readonly stageTimers: Map<string, number> = new Map();
+  private readonly stagePercent: Map<string, number> = new Map();
   private readonly completedStages: string[] = [];
 
   constructor() {
@@ -35,12 +36,18 @@ export class ProgressDisplay {
     switch (event.status) {
       case "started":
         this.stageTimers.set(event.stage, Date.now());
+        this.stagePercent.delete(event.stage);
         this.spinner.start(`${icon} ${label}...`);
         break;
 
       case "progress":
         if (event.percent !== undefined) {
-          this.spinner.text = `${icon} ${label}... ${chalk.cyan(`${Math.round(event.percent)}%`)}`;
+          const prev = this.stagePercent.get(event.stage) ?? 0;
+          const current = Math.round(event.percent);
+          if (current >= prev) {
+            this.stagePercent.set(event.stage, current);
+            this.spinner.text = `${icon} ${label}... ${chalk.cyan(`${current}%`)}`;
+          }
         }
         break;
 
@@ -74,11 +81,17 @@ export class ProgressDisplay {
         `Итого: ${totalTime} | Видео: ${params.videoDuration} | Модель: ${params.model}`,
       ),
     );
-    console.log(chalk.green(`📄 Отчёт сохранён: ${params.outputPath}`));
+    const fileLink = this.formatFileLink(params.outputPath);
+    console.log(chalk.green(`📄 Отчёт сохранён: ${fileLink}`));
   }
 
   showError(message: string): void {
     this.spinner.fail(chalk.red(message));
+  }
+
+  private formatFileLink(filePath: string): string {
+    const fileUrl = `file://${filePath}`;
+    return `\x1b]8;;${fileUrl}\x07${filePath}\x1b]8;;\x07`;
   }
 
   private formatElapsed(ms: number): string {

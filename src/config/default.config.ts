@@ -5,13 +5,14 @@ const LlmSchema = z.object({
   model: z.string().optional(),
   maxTokens: z.number().int().positive().default(4096),
   temperature: z.number().min(0).max(2).default(0),
+  reportLanguage: z.string().default("ru"),
 });
 
 const WhisperSchema = z.object({
   model: z.string().default("large-v3-turbo"),
   language: z.string().default("auto"),
   binaryPath: z.string().default("whisper-cli"),
-  modelPath: z.string().optional(),
+  modelDir: z.string().default("~/.tolmach/models"),
 });
 
 const OutputSchema = z.object({

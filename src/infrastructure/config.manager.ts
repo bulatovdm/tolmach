@@ -22,19 +22,12 @@ export class ConfigManager {
   ) {}
 
   async load(cliOverrides?: CliOverrides): Promise<TolmachConfig> {
-    // 1. Load .env
     dotenvConfig();
 
-    // 2. Load JSON config file
     const fileConfig = await this.loadFileConfig();
-
-    // 3. Load from env vars
     const envConfig = this.loadEnvConfig();
-
-    // 4. Merge: CLI → env → file → defaults (CLI highest priority)
     const merged = this.merge(fileConfig, envConfig, cliOverrides);
 
-    // 5. Validate with zod
     this.config = TolmachConfigSchema.parse(merged);
     return this.config;
   }
@@ -85,6 +78,9 @@ export class ConfigManager {
     if (process.env["LLM_MODEL"]) {
       llm["model"] = process.env["LLM_MODEL"];
     }
+    if (process.env["LLM_REPORT_LANGUAGE"]) {
+      llm["reportLanguage"] = process.env["LLM_REPORT_LANGUAGE"];
+    }
     if (Object.keys(llm).length > 0) {
       result["llm"] = llm;
     }
@@ -98,6 +94,9 @@ export class ConfigManager {
     }
     if (process.env["WHISPER_BINARY"]) {
       whisper["binaryPath"] = process.env["WHISPER_BINARY"];
+    }
+    if (process.env["WHISPER_MODEL_DIR"]) {
+      whisper["modelDir"] = process.env["WHISPER_MODEL_DIR"];
     }
     if (Object.keys(whisper).length > 0) {
       result["whisper"] = whisper;
@@ -130,10 +129,8 @@ export class ConfigManager {
     envConfig: Record<string, unknown>,
     cliOverrides?: CliOverrides,
   ): Record<string, unknown> {
-    // Deep merge: file < env < CLI
     const merged = this.deepMerge(fileConfig, envConfig);
 
-    // Apply CLI overrides
     if (cliOverrides) {
       const llm = (merged["llm"] as Record<string, unknown> | undefined) ?? {};
       if (cliOverrides.llmProvider) {

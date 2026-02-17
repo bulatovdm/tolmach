@@ -1,4 +1,5 @@
 import type { ProcessRunner } from "./process.runner.js";
+import type { FilesystemManager } from "./filesystem.manager.js";
 
 export interface DependencyStatus {
   readonly name: string;
@@ -13,7 +14,10 @@ const REQUIRED_DEPENDENCIES = [
 ] as const;
 
 export class DependencyChecker {
-  constructor(private readonly processRunner: ProcessRunner) {}
+  constructor(
+    private readonly processRunner: ProcessRunner,
+    private readonly filesystemManager?: FilesystemManager | undefined,
+  ) {}
 
   async checkAll(): Promise<readonly DependencyStatus[]> {
     return Promise.all(
@@ -32,14 +36,33 @@ export class DependencyChecker {
     return { name, available: true, version };
   }
 
-  async ensureRequired(): Promise<readonly DependencyStatus[]> {
-    const statuses = await this.checkAll();
+  async checkModel(modelPath: string): Promise<DependencyStatus> {
+    if (!this.filesystemManager) {
+      return { name: "whisper-model", available: false };
+    }
+
+    const exists = await this.filesystemManager.exists(modelPath);
+    return {
+      name: "whisper-model",
+      available: exists,
+      version: exists ? modelPath : undefined,
+    };
+  }
+
+  async ensureRequired(modelPath?: string): Promise<readonly DependencyStatus[]> {
+    const statuses = [...await this.checkAll()];
+
+    if (modelPath) {
+      const modelStatus = await this.checkModel(modelPath);
+      statuses.push(modelStatus);
+    }
+
     const missing = statuses.filter((s) => !s.available);
 
     if (missing.length > 0) {
       const names = missing.map((s) => s.name).join(", ");
       throw new Error(
-        `Missing required dependencies: ${names}. Install them before using tolmach.`,
+        `Missing required dependencies: ${names}. Run "pnpm setup" to install them.`,
       );
     }
 

@@ -1,4 +1,4 @@
-import { join, basename } from "node:path";
+import { join, basename, isAbsolute } from "node:path";
 import { type Result, ok, err } from "../../shared/result.js";
 import { TranscriptionError, TRANSCRIPTION_ERROR_CODE } from "../../shared/errors.js";
 import type { ProgressCallback } from "../../shared/types.js";
@@ -96,10 +96,11 @@ export class WhisperTranscriber implements Transcriber {
     options: TranscriptionOptions,
     outputPrefix: string,
   ): readonly string[] {
-    const args: string[] = ["-f", audioPath, "--output-json-full", "-of", outputPrefix];
+    const args: string[] = ["-f", audioPath, "--output-json-full", "-pp", "-of", outputPrefix];
 
     if (options.model) {
-      args.push("-m", options.model);
+      const modelPath = this.resolveModelPath(options.model, options.modelDir);
+      args.push("-m", modelPath);
     }
 
     if (options.language && options.language !== "auto") {
@@ -107,5 +108,14 @@ export class WhisperTranscriber implements Transcriber {
     }
 
     return args;
+  }
+
+  private resolveModelPath(model: string, modelDir?: string): string {
+    if (isAbsolute(model) || model.endsWith(".bin")) {
+      return model;
+    }
+
+    const dir = modelDir ?? "~/.tolmach/models";
+    return join(dir, `ggml-${model}.bin`);
   }
 }

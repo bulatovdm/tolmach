@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir, stat, access } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rm, stat, access } from "node:fs/promises";
 import { dirname } from "node:path";
 import { homedir } from "node:os";
 import { type Result, ok, err } from "../shared/result.js";
@@ -73,6 +73,10 @@ export class FilesystemManager {
         ),
       );
     }
+  }
+
+  async removeDir(path: string): Promise<void> {
+    await rm(path, { recursive: true, force: true }).catch(() => {});
   }
 
   resolvePath(path: string): string {

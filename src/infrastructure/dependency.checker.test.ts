@@ -67,4 +67,44 @@ describe("DependencyChecker", () => {
 
     await expect(checker.ensureRequired()).rejects.toThrow("yt-dlp, ffmpeg, whisper-cli");
   });
+
+  it("checkModel returns available when file exists", async () => {
+    const mockFs = {
+      exists: vi.fn().mockResolvedValue(true),
+    };
+    const checkerWithFs = new DependencyChecker(
+      mockRunner,
+      mockFs as unknown as import("./filesystem.manager.js").FilesystemManager,
+    );
+
+    const status = await checkerWithFs.checkModel("/path/to/ggml-large-v3-turbo.bin");
+    expect(status.name).toBe("whisper-model");
+    expect(status.available).toBe(true);
+  });
+
+  it("checkModel returns unavailable when file missing", async () => {
+    const mockFs = {
+      exists: vi.fn().mockResolvedValue(false),
+    };
+    const checkerWithFs = new DependencyChecker(
+      mockRunner,
+      mockFs as unknown as import("./filesystem.manager.js").FilesystemManager,
+    );
+
+    const status = await checkerWithFs.checkModel("/path/to/missing.bin");
+    expect(status.name).toBe("whisper-model");
+    expect(status.available).toBe(false);
+  });
+
+  it("ensureRequired checks model when modelPath provided", async () => {
+    const mockFs = {
+      exists: vi.fn().mockResolvedValue(false),
+    };
+    const checkerWithFs = new DependencyChecker(
+      mockRunner,
+      mockFs as unknown as import("./filesystem.manager.js").FilesystemManager,
+    );
+
+    await expect(checkerWithFs.ensureRequired("/path/to/missing.bin")).rejects.toThrow("whisper-model");
+  });
 });

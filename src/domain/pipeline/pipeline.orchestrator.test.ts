@@ -76,6 +76,7 @@ describe("PipelineOrchestrator", () => {
     mockFilesystem = {
       ensureDir: vi.fn().mockResolvedValue(undefined),
       writeFile: vi.fn().mockResolvedValue(undefined),
+      removeDir: vi.fn().mockResolvedValue(undefined),
       resolvePath: vi.fn().mockReturnValue("/home/user/.tolmach/reports"),
     } as unknown as FilesystemManager;
   });

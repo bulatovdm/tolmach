@@ -4,18 +4,22 @@ import { ConfigManager } from "./config.manager.js";
 import { ok } from "../shared/result.js";
 import type { FilesystemManager } from "./filesystem.manager.js";
 
+vi.mock("dotenv", () => ({
+  config: vi.fn(),
+}));
+
 describe("ConfigManager", () => {
   let mockFs: FilesystemManager;
   let configManager: ConfigManager;
   const originalEnv = { ...process.env };
 
   beforeEach(() => {
-    // Clean env
     delete process.env["LLM_PROVIDER"];
     delete process.env["LLM_MODEL"];
     delete process.env["WHISPER_MODEL"];
     delete process.env["WHISPER_LANGUAGE"];
     delete process.env["WHISPER_BINARY"];
+    delete process.env["WHISPER_MODEL_DIR"];
     delete process.env["TOLMACH_OUTPUT_DIR"];
     delete process.env["TOLMACH_CACHE_DIR"];
     delete process.env["TOLMACH_CACHE_ENABLED"];
@@ -84,7 +88,7 @@ describe("ConfigManager", () => {
   });
 
   it("saves config to file", async () => {
-    await configManager.save({ llm: { provider: "mock", maxTokens: 4096, temperature: 0 } });
+    await configManager.save({ llm: { provider: "mock", maxTokens: 4096, temperature: 0, reportLanguage: "ru" } });
 
     expect(mockFs.writeFile).toHaveBeenCalledWith(
       expect.stringContaining("config.json"),

@@ -33,7 +33,6 @@ export async function transcribeCommand(url: string, options: TranscribeOptions)
   const processRunner = new ProcessRunner();
   const filesystemManager = new FilesystemManager();
 
-  // Load config (CLI → env → file → defaults)
   const configManager = new ConfigManager(filesystemManager);
   const config = await configManager.load({
     llmProvider: options.llmProvider ?? options.provider,
@@ -42,10 +41,11 @@ export async function transcribeCommand(url: string, options: TranscribeOptions)
     outputDir: options.output,
   });
 
-  // Check dependencies
-  const depChecker = new DependencyChecker(processRunner);
+  const modelDir = filesystemManager.resolvePath(config.whisper.modelDir);
+  const modelPath = `${modelDir}/ggml-${config.whisper.model}.bin`;
+  const depChecker = new DependencyChecker(processRunner, filesystemManager);
   try {
-    await depChecker.ensureRequired();
+    await depChecker.ensureRequired(modelPath);
   } catch (error) {
     display.showError((error as Error).message);
     process.exitCode = 1;
@@ -63,18 +63,15 @@ export async function transcribeCommand(url: string, options: TranscribeOptions)
     new HallucinationFilter(),
   );
 
-  // Cache manager (if enabled)
   const cacheManager = config.cache.enabled
     ? new CacheManager(filesystemManager, filesystemManager.resolvePath(config.cache.dir))
     : undefined;
 
-  // If --no-llm, run transcription-only pipeline
   if (options.noLlm) {
     await runTranscriptionOnly(url, config, display, registry, transcriber, filesystemManager, cacheManager);
     return;
   }
 
-  // Full pipeline with LLM
   const llmProviders = [
     new ClaudeAgentProvider(),
     new MockLlmProvider(),
@@ -96,8 +93,10 @@ export async function transcribeCommand(url: string, options: TranscribeOptions)
     {
       url,
       whisperModel: config.whisper.model,
+      whisperModelDir: filesystemManager.resolvePath(config.whisper.modelDir),
       language: config.whisper.language,
       llmProvider: config.llm.provider,
+      reportLanguage: config.llm.reportLanguage,
       outputDir: config.output.dir,
       outputPath: options.output,
     },
@@ -170,7 +169,6 @@ async function runTranscriptionOnly(
   const downloaded = downloadResult.value;
   const whisperModel = config.whisper.model;
 
-  // Check cache
   display.handleProgress({ stage: PIPELINE_STAGE.Transcribe, status: "started" });
   const cached = await cacheManager?.get(downloaded.audioPath, whisperModel);
 
@@ -185,6 +183,7 @@ async function runTranscriptionOnly(
         model: whisperModel,
         language: config.whisper.language,
         outputDir: tempDir,
+        modelDir: filesystemManager.resolvePath(config.whisper.modelDir),
       },
       (event) => {
         display.handleProgress({ ...event, stage: PIPELINE_STAGE.Transcribe });
@@ -202,18 +201,32 @@ async function runTranscriptionOnly(
     display.handleProgress({ stage: PIPELINE_STAGE.Transcribe, status: "completed" });
     transcription = transcriptionResult.value;
 
-    // Save to cache
     await cacheManager?.set(downloaded.audioPath, whisperModel, transcription);
   }
 
-  console.log(`\nТранскрипция (${transcription.language}, ${transcription.segments.length} сегментов):\n`);
-  console.log(transcription.fullText);
+  display.handleProgress({ stage: PIPELINE_STAGE.Save, status: "started" });
+  const outputDir = filesystemManager.resolvePath(config.output.dir);
+  await filesystemManager.ensureDir(outputDir);
+
+  const slug = downloaded.metadata.title
+    .toLowerCase()
+    .replace(/[^a-zа-яё0-9]+/giu, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  const date = new Date().toISOString().split("T")[0];
+  const outputPath = join(outputDir, `${date}-${slug}.txt`);
+
+  const header = `Транскрипция: ${downloaded.metadata.title}\nАвтор: ${downloaded.metadata.author}\nДлительность: ${downloaded.metadata.formattedDuration}\nЯзык: ${transcription.language}\nСегментов: ${transcription.segments.length}\n\n---\n\n`;
+  await filesystemManager.writeFile(outputPath, header + transcription.fullText);
+  display.handleProgress({ stage: PIPELINE_STAGE.Save, status: "completed" });
+
+  await filesystemManager.removeDir(tempDir);
 
   const totalDuration = Date.now() - startTime;
   display.showSummary({
     totalDurationMs: totalDuration,
     videoDuration: downloaded.metadata.formattedDuration,
     model: whisperModel,
-    outputPath: "(LLM не подключён — только транскрипция)",
+    outputPath,
   });
 }

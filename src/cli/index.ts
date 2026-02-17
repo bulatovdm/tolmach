@@ -1,8 +1,17 @@
 #!/usr/bin/env node
 
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { Command } from "commander";
 import { transcribeCommand } from "./commands/transcribe.command.js";
 import { configShowCommand, configSetCommand, configPathCommand } from "./commands/config.command.js";
+
+const extraPaths = [
+  join(homedir(), ".deno", "bin"),
+  join(homedir(), ".local", "bin"),
+];
+const currentPath = process.env["PATH"] ?? "";
+process.env["PATH"] = [...extraPaths, currentPath].join(":");
 
 const program = new Command();
 

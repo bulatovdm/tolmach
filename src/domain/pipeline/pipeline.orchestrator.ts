@@ -17,9 +17,11 @@ import type { CacheManager } from "../../infrastructure/cache.manager.js";
 export interface PipelineOptions {
   readonly url: string;
   readonly whisperModel?: string | undefined;
+  readonly whisperModelDir?: string | undefined;
   readonly language?: string | undefined;
   readonly llmProvider?: string | undefined;
   readonly llmModel?: string | undefined;
+  readonly reportLanguage?: string | undefined;
   readonly outputPath?: string | undefined;
   readonly outputDir?: string | undefined;
 }
@@ -46,7 +48,6 @@ export class PipelineOrchestrator {
   ): Promise<Result<PipelineResult, PipelineError>> {
     const startTime = Date.now();
 
-    // Stage 1: Detect provider
     onProgress({ stage: PIPELINE_STAGE.Detect, status: "started" });
     const providerResult = this.videoRegistry.findProvider(options.url);
     if (!providerResult.ok) {
@@ -71,7 +72,6 @@ export class PipelineOrchestrator {
       message: videoProvider.name,
     });
 
-    // Stage 2: Download
     onProgress({ stage: PIPELINE_STAGE.Download, status: "started" });
     const tempDir = join(tmpdir(), `tolmach-${Date.now()}`);
     await this.filesystemManager.ensureDir(tempDir);
@@ -97,11 +97,9 @@ export class PipelineOrchestrator {
     onProgress({ stage: PIPELINE_STAGE.Download, status: "completed" });
     const downloaded = downloadResult.value;
 
-    // Stage 3: Transcribe (with cache)
     onProgress({ stage: PIPELINE_STAGE.Transcribe, status: "started" });
     const whisperModel = options.whisperModel ?? "large-v3-turbo";
 
-    // Check cache first
     const cached = await this.cacheManager?.get(downloaded.audioPath, whisperModel);
     let transcription;
 
@@ -115,6 +113,7 @@ export class PipelineOrchestrator {
           model: whisperModel,
           language: options.language ?? "auto",
           outputDir: tempDir,
+          modelDir: options.whisperModelDir,
         },
         (event) => {
           onProgress({ ...event, stage: PIPELINE_STAGE.Transcribe });
@@ -138,15 +137,14 @@ export class PipelineOrchestrator {
       onProgress({ stage: PIPELINE_STAGE.Transcribe, status: "completed" });
       transcription = transcriptionResult.value;
 
-      // Save to cache
       await this.cacheManager?.set(downloaded.audioPath, whisperModel, transcription);
     }
 
-    // Stage 4: Generate report via LLM
     onProgress({ stage: PIPELINE_STAGE.Report, status: "started" });
     const context = new PromptContext({
       metadata: downloaded.metadata,
       transcription,
+      reportLanguage: options.reportLanguage,
     });
     const prompt = this.promptTemplate.render(context);
 
@@ -178,7 +176,6 @@ export class PipelineOrchestrator {
       llmResponse,
     });
 
-    // Stage 5: Save report
     onProgress({ stage: PIPELINE_STAGE.Save, status: "started" });
     const outputDir = options.outputPath
       ? options.outputPath
@@ -188,6 +185,8 @@ export class PipelineOrchestrator {
     const outputPath = join(outputDir, report.outputFileName);
     await this.filesystemManager.writeFile(outputPath, report.toMarkdown());
     onProgress({ stage: PIPELINE_STAGE.Save, status: "completed" });
+
+    await this.filesystemManager.removeDir(tempDir);
 
     const totalDurationMs = Date.now() - startTime;
 

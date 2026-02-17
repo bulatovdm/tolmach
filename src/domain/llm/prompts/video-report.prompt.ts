@@ -5,7 +5,11 @@ export class VideoReportPrompt implements PromptTemplate {
   readonly name = "video-report";
 
   render(context: PromptContext): string {
-    const { metadata, transcription } = context;
+    const { metadata, transcription, reportLanguage } = context;
+
+    const languageInstruction = reportLanguage === "auto"
+      ? "Создай отчёт на том же языке, что и транскрипция"
+      : `Создай отчёт на языке: ${reportLanguage}`;
 
     return `Ты — аналитик видеоконтента. Проанализируй транскрипцию видео и создай структурированный отчёт в формате Markdown.
 
@@ -26,7 +30,7 @@ ${transcription.fullText}
 
 ## Инструкции
 
-Создай отчёт на том же языке, что и транскрипция, со следующей структурой:
+${languageInstruction}, со следующей структурой:
 
 1. **Краткое содержание** (3–5 предложений) — основная суть видео
 2. **Ключевые темы** — маркированный список основных тем/разделов
