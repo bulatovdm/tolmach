@@ -27,18 +27,19 @@
 
 ## Этап 3 — Полировка
 
-- [ ] Кэширование транскрипций
-- [ ] ConfigManager (JSON + .env + CLI merge)
-- [ ] Проверка системных зависимостей при старте
-- [ ] Команда `tolmach config`
-- [ ] README.md
-- [ ] npm bin → глобальный алиас `tolmach`
-- [ ] Финальные тесты, все проходят
+- [x] Кэширование транскрипций (CacheManager + интеграция в PipelineOrchestrator)
+- [x] ConfigManager (JSON + .env + CLI merge, zod v4 валидация)
+- [x] Проверка системных зависимостей при старте (DependencyChecker)
+- [x] Команда `tolmach config` (show / set / path)
+- [x] Интеграция в CLI: ConfigManager, CacheManager, DependencyChecker
+- [x] npm bin → глобальный алиас `tolmach` (в package.json)
+- [x] Финальные тесты (156), lint, typecheck — все проходят
 
 ## Лог изменений
 
 | Дата | Этап | Что сделано | Тесты |
 |------|------|-------------|-------|
 | 2026-02-17 | Этап 0 | Инициализация: pnpm, tsconfig, eslint, prettier, vitest, tsup, CLAUDE.md, progress.md | — |
-| 2026-02-17 | Этап 1 | Shared, Infrastructure, Video, Transcription, CLI | 91 ✅ |
-| 2026-02-17 | Этап 2 | LLM domain, Claude Agent SDK, LlmRouter, Prompts, PipelineOrchestrator, CLI update | 133 ✅ |
+| 2026-02-17 | Этап 1 | Shared, Infrastructure, Video, Transcription, CLI | 91 |
+| 2026-02-17 | Этап 2 | LLM domain, Claude Agent SDK, LlmRouter, Prompts, PipelineOrchestrator, CLI update | 133 |
+| 2026-02-17 | Этап 3 | CacheManager, ConfigManager, DependencyChecker, config command, CLI интеграция | 156 |

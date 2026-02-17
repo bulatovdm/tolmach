@@ -12,6 +12,7 @@ import { PromptContext } from "../llm/prompts/prompt-context.js";
 import { PipelineReport } from "./pipeline-report.js";
 import { PIPELINE_STAGE } from "./pipeline-event.js";
 import type { FilesystemManager } from "../../infrastructure/filesystem.manager.js";
+import type { CacheManager } from "../../infrastructure/cache.manager.js";
 
 export interface PipelineOptions {
   readonly url: string;
@@ -20,6 +21,7 @@ export interface PipelineOptions {
   readonly llmProvider?: string | undefined;
   readonly llmModel?: string | undefined;
   readonly outputPath?: string | undefined;
+  readonly outputDir?: string | undefined;
 }
 
 export interface PipelineResult {
@@ -35,6 +37,7 @@ export class PipelineOrchestrator {
     private readonly llmRouter: LlmRouter,
     private readonly promptTemplate: PromptTemplate,
     private readonly filesystemManager: FilesystemManager,
+    private readonly cacheManager?: CacheManager | undefined,
   ) {}
 
   async run(
@@ -94,36 +97,50 @@ export class PipelineOrchestrator {
     onProgress({ stage: PIPELINE_STAGE.Download, status: "completed" });
     const downloaded = downloadResult.value;
 
-    // Stage 3: Transcribe
+    // Stage 3: Transcribe (with cache)
     onProgress({ stage: PIPELINE_STAGE.Transcribe, status: "started" });
-    const transcriptionResult = await this.transcriber.transcribe(
-      downloaded.audioPath,
-      {
-        model: options.whisperModel ?? "large-v3-turbo",
-        language: options.language ?? "auto",
-        outputDir: tempDir,
-      },
-      (event) => {
-        onProgress({ ...event, stage: PIPELINE_STAGE.Transcribe });
-      },
-    );
-    if (!transcriptionResult.ok) {
-      onProgress({
-        stage: PIPELINE_STAGE.Transcribe,
-        status: "failed",
-        message: transcriptionResult.error.message,
-      });
-      return err(
-        new PipelineError(
-          PIPELINE_ERROR_CODE.StageFailed,
-          PIPELINE_STAGE.Transcribe,
-          transcriptionResult.error.message,
-          transcriptionResult.error,
-        ),
+    const whisperModel = options.whisperModel ?? "large-v3-turbo";
+
+    // Check cache first
+    const cached = await this.cacheManager?.get(downloaded.audioPath, whisperModel);
+    let transcription;
+
+    if (cached) {
+      onProgress({ stage: PIPELINE_STAGE.Transcribe, status: "completed", message: "из кэша" });
+      transcription = cached;
+    } else {
+      const transcriptionResult = await this.transcriber.transcribe(
+        downloaded.audioPath,
+        {
+          model: whisperModel,
+          language: options.language ?? "auto",
+          outputDir: tempDir,
+        },
+        (event) => {
+          onProgress({ ...event, stage: PIPELINE_STAGE.Transcribe });
+        },
       );
+      if (!transcriptionResult.ok) {
+        onProgress({
+          stage: PIPELINE_STAGE.Transcribe,
+          status: "failed",
+          message: transcriptionResult.error.message,
+        });
+        return err(
+          new PipelineError(
+            PIPELINE_ERROR_CODE.StageFailed,
+            PIPELINE_STAGE.Transcribe,
+            transcriptionResult.error.message,
+            transcriptionResult.error,
+          ),
+        );
+      }
+      onProgress({ stage: PIPELINE_STAGE.Transcribe, status: "completed" });
+      transcription = transcriptionResult.value;
+
+      // Save to cache
+      await this.cacheManager?.set(downloaded.audioPath, whisperModel, transcription);
     }
-    onProgress({ stage: PIPELINE_STAGE.Transcribe, status: "completed" });
-    const transcription = transcriptionResult.value;
 
     // Stage 4: Generate report via LLM
     onProgress({ stage: PIPELINE_STAGE.Report, status: "started" });
@@ -165,7 +182,7 @@ export class PipelineOrchestrator {
     onProgress({ stage: PIPELINE_STAGE.Save, status: "started" });
     const outputDir = options.outputPath
       ? options.outputPath
-      : join(this.filesystemManager.resolvePath("~/.tolmach/reports"));
+      : this.filesystemManager.resolvePath(options.outputDir ?? "~/.tolmach/reports");
     await this.filesystemManager.ensureDir(outputDir);
 
     const outputPath = join(outputDir, report.outputFileName);

@@ -2,6 +2,7 @@
 
 import { Command } from "commander";
 import { transcribeCommand } from "./commands/transcribe.command.js";
+import { configShowCommand, configSetCommand, configPathCommand } from "./commands/config.command.js";
 
 const program = new Command();
 
@@ -31,6 +32,31 @@ program
       llmProvider: (options["llmProvider"] ?? options["provider"]) as string | undefined,
       noLlm: options["llm"] === false,
     });
+  });
+
+const configCmd = program
+  .command("config")
+  .description("Управление конфигурацией");
+
+configCmd
+  .command("show")
+  .description("Показать текущую конфигурацию")
+  .action(async () => {
+    await configShowCommand();
+  });
+
+configCmd
+  .command("set <key> <value>")
+  .description('Установить параметр (например: tolmach config set llm.provider mock)')
+  .action(async (key: string, value: string) => {
+    await configSetCommand(key, value);
+  });
+
+configCmd
+  .command("path")
+  .description("Показать путь к файлу конфигурации")
+  .action(() => {
+    configPathCommand();
   });
 
 program.parse();

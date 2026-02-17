@@ -2,6 +2,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ProcessRunner } from "../../infrastructure/process.runner.js";
 import { FilesystemManager } from "../../infrastructure/filesystem.manager.js";
+import { ConfigManager } from "../../infrastructure/config.manager.js";
+import { CacheManager } from "../../infrastructure/cache.manager.js";
+import { DependencyChecker } from "../../infrastructure/dependency.checker.js";
 import { VideoProviderRegistry } from "../../domain/video/video-provider.registry.js";
 import { YouTubeProvider } from "../../domain/video/providers/youtube.provider.js";
 import { WhisperTranscriber } from "../../domain/transcription/whisper.transcriber.js";
@@ -14,6 +17,7 @@ import { VideoReportPrompt } from "../../domain/llm/prompts/video-report.prompt.
 import { PipelineOrchestrator } from "../../domain/pipeline/pipeline.orchestrator.js";
 import { PIPELINE_STAGE } from "../../domain/pipeline/pipeline-event.js";
 import { ProgressDisplay } from "../ui/progress.display.js";
+import type { TolmachConfig } from "../../config/default.config.js";
 
 export interface TranscribeOptions {
   readonly provider?: string | undefined;
@@ -29,6 +33,25 @@ export async function transcribeCommand(url: string, options: TranscribeOptions)
   const processRunner = new ProcessRunner();
   const filesystemManager = new FilesystemManager();
 
+  // Load config (CLI → env → file → defaults)
+  const configManager = new ConfigManager(filesystemManager);
+  const config = await configManager.load({
+    llmProvider: options.llmProvider ?? options.provider,
+    whisperModel: options.model,
+    language: options.lang,
+    outputDir: options.output,
+  });
+
+  // Check dependencies
+  const depChecker = new DependencyChecker(processRunner);
+  try {
+    await depChecker.ensureRequired();
+  } catch (error) {
+    display.showError((error as Error).message);
+    process.exitCode = 1;
+    return;
+  }
+
   const registry = new VideoProviderRegistry([
     new YouTubeProvider(processRunner, filesystemManager),
   ]);
@@ -40,9 +63,14 @@ export async function transcribeCommand(url: string, options: TranscribeOptions)
     new HallucinationFilter(),
   );
 
-  // If --no-llm, run transcription-only pipeline (backward compat)
+  // Cache manager (if enabled)
+  const cacheManager = config.cache.enabled
+    ? new CacheManager(filesystemManager, filesystemManager.resolvePath(config.cache.dir))
+    : undefined;
+
+  // If --no-llm, run transcription-only pipeline
   if (options.noLlm) {
-    await runTranscriptionOnly(url, options, display, registry, transcriber, filesystemManager);
+    await runTranscriptionOnly(url, config, display, registry, transcriber, filesystemManager, cacheManager);
     return;
   }
 
@@ -52,7 +80,7 @@ export async function transcribeCommand(url: string, options: TranscribeOptions)
     new MockLlmProvider(),
   ];
 
-  const llmRouter = new LlmRouter(llmProviders, options.llmProvider ?? "claude-agent");
+  const llmRouter = new LlmRouter(llmProviders, config.llm.provider);
   const promptTemplate = new VideoReportPrompt();
 
   const orchestrator = new PipelineOrchestrator(
@@ -61,14 +89,16 @@ export async function transcribeCommand(url: string, options: TranscribeOptions)
     llmRouter,
     promptTemplate,
     filesystemManager,
+    cacheManager,
   );
 
   const result = await orchestrator.run(
     {
       url,
-      whisperModel: options.model,
-      language: options.lang,
-      llmProvider: options.llmProvider,
+      whisperModel: config.whisper.model,
+      language: config.whisper.language,
+      llmProvider: config.llm.provider,
+      outputDir: config.output.dir,
       outputPath: options.output,
     },
     (event) => { display.handleProgress(event); },
@@ -92,11 +122,12 @@ export async function transcribeCommand(url: string, options: TranscribeOptions)
 
 async function runTranscriptionOnly(
   url: string,
-  options: TranscribeOptions,
+  config: TolmachConfig,
   display: ProgressDisplay,
   registry: VideoProviderRegistry,
   transcriber: WhisperTranscriber,
   filesystemManager: FilesystemManager,
+  cacheManager?: CacheManager,
 ): Promise<void> {
   const startTime = Date.now();
 
@@ -137,31 +168,43 @@ async function runTranscriptionOnly(
   display.handleProgress({ stage: PIPELINE_STAGE.Download, status: "completed" });
 
   const downloaded = downloadResult.value;
+  const whisperModel = config.whisper.model;
 
+  // Check cache
   display.handleProgress({ stage: PIPELINE_STAGE.Transcribe, status: "started" });
-  const transcriptionResult = await transcriber.transcribe(
-    downloaded.audioPath,
-    {
-      model: options.model ?? "large-v3-turbo",
-      language: options.lang ?? "auto",
-      outputDir: tempDir,
-    },
-    (event) => {
-      display.handleProgress({ ...event, stage: PIPELINE_STAGE.Transcribe });
-    },
-  );
-  if (!transcriptionResult.ok) {
-    display.handleProgress({
-      stage: PIPELINE_STAGE.Transcribe,
-      status: "failed",
-      message: transcriptionResult.error.message,
-    });
-    process.exitCode = 1;
-    return;
-  }
-  display.handleProgress({ stage: PIPELINE_STAGE.Transcribe, status: "completed" });
+  const cached = await cacheManager?.get(downloaded.audioPath, whisperModel);
 
-  const transcription = transcriptionResult.value;
+  let transcription;
+  if (cached) {
+    display.handleProgress({ stage: PIPELINE_STAGE.Transcribe, status: "completed", message: "из кэша" });
+    transcription = cached;
+  } else {
+    const transcriptionResult = await transcriber.transcribe(
+      downloaded.audioPath,
+      {
+        model: whisperModel,
+        language: config.whisper.language,
+        outputDir: tempDir,
+      },
+      (event) => {
+        display.handleProgress({ ...event, stage: PIPELINE_STAGE.Transcribe });
+      },
+    );
+    if (!transcriptionResult.ok) {
+      display.handleProgress({
+        stage: PIPELINE_STAGE.Transcribe,
+        status: "failed",
+        message: transcriptionResult.error.message,
+      });
+      process.exitCode = 1;
+      return;
+    }
+    display.handleProgress({ stage: PIPELINE_STAGE.Transcribe, status: "completed" });
+    transcription = transcriptionResult.value;
+
+    // Save to cache
+    await cacheManager?.set(downloaded.audioPath, whisperModel, transcription);
+  }
 
   console.log(`\nТранскрипция (${transcription.language}, ${transcription.segments.length} сегментов):\n`);
   console.log(transcription.fullText);
@@ -170,7 +213,7 @@ async function runTranscriptionOnly(
   display.showSummary({
     totalDurationMs: totalDuration,
     videoDuration: downloaded.metadata.formattedDuration,
-    model: options.model ?? "large-v3-turbo",
+    model: whisperModel,
     outputPath: "(LLM не подключён — только транскрипция)",
   });
 }
