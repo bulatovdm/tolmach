@@ -15,6 +15,15 @@ export class ClaudeAgentProvider implements LlmProvider {
     prompt: string,
     options?: LlmCompletionOptions,
   ): Promise<Result<LlmResponse, LlmError>> {
+    if (process.env["CLAUDECODE"]) {
+      return err(
+        new LlmError(
+          LLM_ERROR_CODE.CompletionFailed,
+          "Claude Agent SDK cannot run inside an active Claude Code session. Run tolmach outside of Claude Code, or use --no-llm flag.",
+        ),
+      );
+    }
+
     const model = options?.model ?? DEFAULT_MODEL;
     const startTime = Date.now();
 

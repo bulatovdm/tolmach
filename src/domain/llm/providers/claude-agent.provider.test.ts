@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { LLM_ERROR_CODE } from "../../../shared/errors.js";
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
@@ -23,6 +23,14 @@ function createMockAsyncGenerator(messages: Array<Record<string, unknown>>) {
 
 describe("ClaudeAgentProvider", () => {
   const provider = new ClaudeAgentProvider();
+
+  beforeEach(() => {
+    delete process.env["CLAUDECODE"];
+  });
+
+  afterEach(() => {
+    delete process.env["CLAUDECODE"];
+  });
 
   it("has correct name", () => {
     expect(provider.name).toBe("claude-agent");
@@ -143,6 +151,17 @@ describe("ClaudeAgentProvider", () => {
     if (!result.ok) {
       expect(result.error.code).toBe(LLM_ERROR_CODE.CompletionFailed);
       expect(result.error.message).toContain("Connection failed");
+    }
+  });
+
+  it("returns error when running inside Claude Code session", async () => {
+    process.env["CLAUDECODE"] = "1";
+
+    const result = await provider.complete("Test");
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe(LLM_ERROR_CODE.CompletionFailed);
+      expect(result.error.message).toContain("Claude Code session");
     }
   });
 

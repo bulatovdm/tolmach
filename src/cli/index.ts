@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 
+process.stdout.on("error", (err: NodeJS.ErrnoException) => { if (err.code !== "EPIPE") throw err; });
+process.stderr.on("error", (err: NodeJS.ErrnoException) => { if (err.code !== "EPIPE") throw err; });
+process.on("uncaughtException", (err: NodeJS.ErrnoException) => { if (err.code !== "EPIPE") throw err; });
+
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Command } from "commander";
