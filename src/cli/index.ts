@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { Command } from "commander";
 import { transcribeCommand } from "./commands/transcribe.command.js";
 import { configShowCommand, configSetCommand, configPathCommand } from "./commands/config.command.js";
+import { updateCommand } from "./commands/update.command.js";
 
 const extraPaths = [
   join(homedir(), ".deno", "bin"),
@@ -66,6 +67,13 @@ configCmd
   .description("Показать путь к файлу конфигурации")
   .action(() => {
     configPathCommand();
+  });
+
+program
+  .command("update")
+  .description("Обновить Tolmach до последней версии")
+  .action(() => {
+    updateCommand();
   });
 
 program.parse();
