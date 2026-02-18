@@ -133,10 +133,10 @@ describe("YouTubeProvider", () => {
   });
 
   describe("download", () => {
-    it("downloads and returns DownloadedVideo", async () => {
-      vi.mocked(processRunner.run).mockResolvedValue(
-        ok({ stdout: SAMPLE_YT_DLP_JSON, stderr: "", exitCode: 0 }),
-      );
+    it("downloads and returns DownloadedVideo with sanitized filename from yt-dlp", async () => {
+      vi.mocked(processRunner.run)
+        .mockResolvedValueOnce(ok({ stdout: SAMPLE_YT_DLP_JSON, stderr: "", exitCode: 0 }))
+        .mockResolvedValueOnce(ok({ stdout: "/tmp/Test Video Title.wav\n", stderr: "", exitCode: 0 }));
       vi.mocked(processRunner.runWithProgress).mockResolvedValue(
         ok({ stdout: "", stderr: "", exitCode: 0 }),
       );
@@ -149,14 +149,52 @@ describe("YouTubeProvider", () => {
       if (result.ok) {
         expect(result.value.metadata.title).toBe("Test Video Title");
         expect(result.value.fileSizeBytes).toBe(1024000);
-        expect(result.value.audioPath).toContain("Test Video Title.wav");
+        expect(result.value.audioPath).toBe("/tmp/Test Video Title.wav");
+      }
+    });
+
+    it("uses exact filename returned by yt-dlp --print filename", async () => {
+      const sanitizedPath = "/tmp/Test Video Title - Special Characters.wav";
+      vi.mocked(processRunner.run)
+        .mockResolvedValueOnce(ok({ stdout: SAMPLE_YT_DLP_JSON, stderr: "", exitCode: 0 }))
+        .mockResolvedValueOnce(ok({ stdout: `${sanitizedPath}\n`, stderr: "", exitCode: 0 }));
+      vi.mocked(processRunner.runWithProgress).mockResolvedValue(
+        ok({ stdout: "", stderr: "", exitCode: 0 }),
+      );
+      vi.mocked(filesystemManager.fileSize).mockResolvedValue(
+        ok(512000) as Result<number, FilesystemError>,
+      );
+
+      const result = await provider.download("https://youtube.com/watch?v=abc123", "/tmp", vi.fn());
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.audioPath).toBe(sanitizedPath);
+      }
+    });
+
+    it("returns error when filename resolution fails", async () => {
+      const processError = {
+        command: "yt-dlp",
+        exitCode: 1,
+        stderr: "network error",
+        message: "network error",
+        name: "ProcessError",
+      };
+      vi.mocked(processRunner.run)
+        .mockResolvedValueOnce(ok({ stdout: SAMPLE_YT_DLP_JSON, stderr: "", exitCode: 0 }))
+        .mockResolvedValueOnce(err(processError) as Result<ProcessOutput, ProcessError>);
+
+      const result = await provider.download("https://youtube.com/watch?v=abc123", "/tmp", vi.fn());
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe("VIDEO_DOWNLOAD_FAILED");
       }
     });
 
     it("returns error when download fails", async () => {
-      vi.mocked(processRunner.run).mockResolvedValue(
-        ok({ stdout: SAMPLE_YT_DLP_JSON, stderr: "", exitCode: 0 }),
-      );
+      vi.mocked(processRunner.run)
+        .mockResolvedValueOnce(ok({ stdout: SAMPLE_YT_DLP_JSON, stderr: "", exitCode: 0 }))
+        .mockResolvedValueOnce(ok({ stdout: "/tmp/Test Video Title.wav\n", stderr: "", exitCode: 0 }));
       const processError = {
         command: "yt-dlp",
         exitCode: 1,

@@ -86,6 +86,33 @@ export class YouTubeProvider implements VideoProvider {
     const metadata = metadataResult.value;
     const outputTemplate = join(outputDir, "%(title)s.%(ext)s");
 
+    const filenameResult = await this.processRunner.run("yt-dlp", [
+      "-x",
+      "--audio-format",
+      "wav",
+      "--audio-quality",
+      "5",
+      "-f",
+      "worstaudio",
+      "--print",
+      "filename",
+      "-o",
+      outputTemplate,
+      url,
+    ]);
+
+    if (!filenameResult.ok) {
+      return err(
+        new VideoError(
+          VIDEO_ERROR_CODE.DownloadFailed,
+          `Failed to resolve output filename: ${filenameResult.error.message}`,
+          filenameResult.error,
+        ),
+      );
+    }
+
+    const audioPath = filenameResult.value.stdout.trim();
+
     const downloadResult = await this.processRunner.runWithProgress(
       "yt-dlp",
       [
@@ -119,7 +146,6 @@ export class YouTubeProvider implements VideoProvider {
       );
     }
 
-    const audioPath = join(outputDir, `${metadata.title}.wav`);
     const sizeResult = await this.filesystemManager.fileSize(audioPath);
     const fileSizeBytes = sizeResult.ok ? sizeResult.value : 0;
 

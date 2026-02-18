@@ -43,3 +43,4 @@
 | 2026-02-17 | Этап 1 | Shared, Infrastructure, Video, Transcription, CLI | 91 |
 | 2026-02-17 | Этап 2 | LLM domain, Claude Agent SDK, LlmRouter, Prompts, PipelineOrchestrator, CLI update | 133 |
 | 2026-02-17 | Этап 3 | CacheManager, ConfigManager, DependencyChecker, config command, CLI интеграция | 156 |
+| 2026-02-18 | Bugfix | YouTubeProvider: путь к аудио теперь берётся через yt-dlp --print filename вместо metadata.title, чтобы учитывать sanitization имени файла | 173 |
