@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, extname } from "node:path";
 import { type Result, ok, err } from "../../../shared/result.js";
 import { VideoError, VIDEO_ERROR_CODE } from "../../../shared/errors.js";
 import type { ProgressCallback } from "../../../shared/types.js";
@@ -111,7 +111,8 @@ export class YouTubeProvider implements VideoProvider {
       );
     }
 
-    const audioPath = filenameResult.value.stdout.trim();
+    const rawPath = filenameResult.value.stdout.trim();
+    const audioPath = rawPath.slice(0, rawPath.length - extname(rawPath).length) + ".wav";
 
     const downloadResult = await this.processRunner.runWithProgress(
       "yt-dlp",

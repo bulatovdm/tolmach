@@ -136,7 +136,7 @@ describe("YouTubeProvider", () => {
     it("downloads and returns DownloadedVideo with sanitized filename from yt-dlp", async () => {
       vi.mocked(processRunner.run)
         .mockResolvedValueOnce(ok({ stdout: SAMPLE_YT_DLP_JSON, stderr: "", exitCode: 0 }))
-        .mockResolvedValueOnce(ok({ stdout: "/tmp/Test Video Title.wav\n", stderr: "", exitCode: 0 }));
+        .mockResolvedValueOnce(ok({ stdout: "/tmp/Test Video Title.m4a\n", stderr: "", exitCode: 0 }));
       vi.mocked(processRunner.runWithProgress).mockResolvedValue(
         ok({ stdout: "", stderr: "", exitCode: 0 }),
       );
@@ -153,11 +153,10 @@ describe("YouTubeProvider", () => {
       }
     });
 
-    it("uses exact filename returned by yt-dlp --print filename", async () => {
-      const sanitizedPath = "/tmp/Test Video Title - Special Characters.wav";
+    it("replaces original extension with .wav after audio conversion", async () => {
       vi.mocked(processRunner.run)
         .mockResolvedValueOnce(ok({ stdout: SAMPLE_YT_DLP_JSON, stderr: "", exitCode: 0 }))
-        .mockResolvedValueOnce(ok({ stdout: `${sanitizedPath}\n`, stderr: "", exitCode: 0 }));
+        .mockResolvedValueOnce(ok({ stdout: "/tmp/Test Video Title： Special.m4a\n", stderr: "", exitCode: 0 }));
       vi.mocked(processRunner.runWithProgress).mockResolvedValue(
         ok({ stdout: "", stderr: "", exitCode: 0 }),
       );
@@ -168,7 +167,7 @@ describe("YouTubeProvider", () => {
       const result = await provider.download("https://youtube.com/watch?v=abc123", "/tmp", vi.fn());
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.value.audioPath).toBe(sanitizedPath);
+        expect(result.value.audioPath).toBe("/tmp/Test Video Title： Special.wav");
       }
     });
 
