@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import chalk from "chalk";
 
 export function updateCommand(): void {
-  const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+  const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
   console.log(chalk.yellow("Обновление Tolmach..."));
   console.log(chalk.dim(`Директория проекта: ${projectDir}\n`));
