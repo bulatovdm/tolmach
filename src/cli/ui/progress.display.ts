@@ -19,11 +19,16 @@ const STAGE_LABELS: Record<string, string> = {
   [PIPELINE_STAGE.Save]: "Сохранение отчёта",
 };
 
+const LOCAL_STAGE_LABELS: Partial<Record<string, string>> = {
+  [PIPELINE_STAGE.Download]: "Извлечение аудио",
+};
+
 export class ProgressDisplay {
   private spinner: Ora;
   private readonly stageTimers: Map<string, number> = new Map();
   private readonly stagePercent: Map<string, number> = new Map();
   private readonly completedStages: string[] = [];
+  private providerName: string = "";
 
   constructor() {
     this.spinner = ora();
@@ -31,7 +36,8 @@ export class ProgressDisplay {
 
   handleProgress(event: ProgressEvent): void {
     const icon = STAGE_ICONS[event.stage] ?? "⏳";
-    const label = STAGE_LABELS[event.stage] ?? event.stage;
+    const overrides = this.providerName === "local" ? LOCAL_STAGE_LABELS : {};
+    const label = overrides[event.stage] ?? STAGE_LABELS[event.stage] ?? event.stage;
 
     switch (event.status) {
       case "started":
@@ -52,6 +58,9 @@ export class ProgressDisplay {
         break;
 
       case "completed": {
+        if (event.stage === PIPELINE_STAGE.Detect && event.message) {
+          this.providerName = event.message;
+        }
         const startTime = this.stageTimers.get(event.stage);
         const elapsed = startTime ? Date.now() - startTime : 0;
         const timeStr = this.formatElapsed(elapsed);

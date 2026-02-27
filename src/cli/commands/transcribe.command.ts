@@ -8,6 +8,7 @@ import { DependencyChecker } from "../../infrastructure/dependency.checker.js";
 import { VideoProviderRegistry } from "../../domain/video/video-provider.registry.js";
 import { YouTubeProvider } from "../../domain/video/providers/youtube.provider.js";
 import { VimeoProvider } from "../../domain/video/providers/vimeo.provider.js";
+import { LocalVideoProvider } from "../../domain/video/providers/local.provider.js";
 import { WhisperTranscriber } from "../../domain/transcription/whisper.transcriber.js";
 import { WhisperOutputParser } from "../../domain/transcription/whisper-output.parser.js";
 import { HallucinationFilter } from "../../domain/transcription/hallucination.filter.js";
@@ -56,6 +57,7 @@ export async function transcribeCommand(url: string, options: TranscribeOptions)
   const registry = new VideoProviderRegistry([
     new YouTubeProvider(processRunner, filesystemManager),
     new VimeoProvider(processRunner, filesystemManager),
+    new LocalVideoProvider(processRunner, filesystemManager),
   ]);
 
   const transcriber = new WhisperTranscriber(
