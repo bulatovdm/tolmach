@@ -8,11 +8,11 @@ import { TranscriptionSegment } from "../../transcription/transcription-segment.
 describe("VideoReportPrompt", () => {
   const prompt = new VideoReportPrompt();
 
-  function createContext(): PromptContext {
+  function createContext(durationSeconds = 120): PromptContext {
     const metadata = new VideoMetadata({
       title: "Test Video",
       author: "Author",
-      durationSeconds: 120,
+      durationSeconds,
       description: "A test video",
       url: "https://youtube.com/watch?v=123",
       provider: "youtube",
@@ -62,5 +62,40 @@ describe("VideoReportPrompt", () => {
     expect(rendered).toContain("Основные тезисы");
     expect(rendered).toContain("Цитаты");
     expect(rendered).toContain("Заключение");
+  });
+
+  it("uses short scale for videos under 15 minutes", () => {
+    const rendered = prompt.render(createContext(600));
+    expect(rendered).toContain("3–5 предложений");
+    expect(rendered).toContain("3–5 наиболее значимых цитат");
+    expect(rendered).toContain("Пиши ёмко, но информативно.");
+  });
+
+  it("uses medium scale for videos between 15 and 45 minutes", () => {
+    const rendered = prompt.render(createContext(1800));
+    expect(rendered).toContain("5–8 предложений");
+    expect(rendered).toContain("5–8 наиболее значимых цитат");
+    expect(rendered).toContain("8–15 тезисов");
+    expect(rendered).toContain("раскрой каждую тему 1–2 предложениями");
+    expect(rendered).toContain("Видео средней длительности");
+  });
+
+  it("uses long scale for videos over 45 minutes", () => {
+    const rendered = prompt.render(createContext(3600));
+    expect(rendered).toContain("8–12 предложений");
+    expect(rendered).toContain("8–12 наиболее значимых цитат");
+    expect(rendered).toContain("15–25 тезисов");
+    expect(rendered).toContain("раскрой каждую тему 2–3 предложениями");
+    expect(rendered).toContain("Это длинное видео");
+  });
+
+  it("treats boundary at 15 minutes as medium", () => {
+    const rendered = prompt.render(createContext(901));
+    expect(rendered).toContain("5–8 предложений");
+  });
+
+  it("treats boundary at 45 minutes as long", () => {
+    const rendered = prompt.render(createContext(2701));
+    expect(rendered).toContain("8–12 предложений");
   });
 });
