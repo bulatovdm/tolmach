@@ -82,16 +82,21 @@ ensure_homebrew() {
     print_success "Homebrew installed"
 }
 
-install_deno() {
-    next_step "Checking deno"
-    export PATH="$HOME/.deno/bin:$PATH"
-    command -v deno &>/dev/null && {
-        print_success "deno $(deno --version 2>/dev/null | head -1 | awk '{print $2}')"
+ensure_claude_code() {
+    next_step "Checking Claude Code CLI"
+    command -v claude &>/dev/null && {
+        print_success "Claude Code CLI found"
         return 0
     }
-    curl -fsSL https://deno.land/install.sh | sh
-    add_to_shell_path "$HOME/.deno/bin"
-    print_success "deno installed"
+    echo "  Installing Claude Code via Homebrew..."
+    brew install claude-code && {
+        print_success "Claude Code installed"
+        print_warning "Run 'claude' to log in before using tolmach"
+        return 0
+    }
+    print_error "Failed to install Claude Code"
+    print_warning "Install manually: brew install claude-code"
+    exit 1
 }
 
 install_ytdlp() {
@@ -189,60 +194,44 @@ download_whisper_model() {
     echo "  curl -L -o $MODELS_DIR/$MODEL_NAME $MODEL_URL"
 }
 
-ensure_node() {
-    next_step "Checking Node.js"
-    command -v node &>/dev/null || {
-        print_error "Node.js not installed"
-        print_warning "Install: brew install node@22"
-        exit 1
-    }
+verify_skill() {
+    next_step "Verifying tolmach skill"
+    local skill_path="$PROJECT_DIR/.claude/skills/tolmach/SKILL.md"
 
-    local version
-    version=$(node -v | sed 's/v//')
-    local major
-    major=$(echo "$version" | cut -d. -f1)
-
-    [[ "$major" -ge 20 ]] || {
-        print_error "Node.js v$version (requires >= 20)"
-        print_warning "Update: brew install node@22"
-        exit 1
-    }
-    print_success "Node.js v$version"
-}
-
-ensure_pnpm() {
-    next_step "Checking pnpm"
-    command -v pnpm &>/dev/null && {
-        print_success "pnpm $(pnpm -v)"
+    [[ -f "$skill_path" ]] && {
+        print_success "Skill found: $skill_path"
         return 0
     }
-    npm install -g pnpm
-    print_success "pnpm installed"
+    print_error "Skill not found: $skill_path"
+    exit 1
 }
 
-install_project_dependencies() {
-    next_step "Installing project dependencies"
-    cd "$PROJECT_DIR"
-    pnpm install --frozen-lockfile 2>/dev/null || pnpm install
-    print_success "Dependencies installed"
-}
+install_shell_function() {
+    next_step "Installing tolmach shell function"
+    local shell_rc="$HOME/.zshrc"
+    [[ "$SHELL" == */bash ]] && shell_rc="$HOME/.bashrc"
 
-build_and_link() {
-    next_step "Building and linking CLI"
-    cd "$PROJECT_DIR"
-    pnpm build
-    pnpm link --global
-    print_success "tolmach command available globally"
-}
-
-create_env_file() {
-    next_step "Creating .env"
-    [[ -f "$PROJECT_DIR/.env" ]] && {
-        print_success ".env already exists"
+    local marker="# tolmach"
+    if [[ -f "$shell_rc" ]] && grep -qF "$marker" "$shell_rc"; then
+        print_success "Shell function already configured in $shell_rc"
         return 0
-    }
-    cp "$PROJECT_DIR/.env.example" "$PROJECT_DIR/.env"
-    print_success ".env created from .env.example"
+    fi
+
+    local tolmach_dir="$PROJECT_DIR"
+    cat >> "$shell_rc" << SHELL_FUNC
+
+# tolmach
+tolmach() {
+  if [ -z "\$1" ]; then
+    echo "Usage: tolmach <video-url-or-path>"
+    return 1
+  fi
+  cd "$tolmach_dir" && claude --model claude-sonnet-4-5-20250929 "/tolmach \$*"
+}
+SHELL_FUNC
+
+    print_success "Shell function added to $shell_rc"
+    print_warning "Run: source $shell_rc (or restart terminal)"
 }
 
 create_tolmach_directories() {
@@ -255,7 +244,7 @@ verify_installation() {
     next_step "Verifying installation"
     local errors=0
 
-    for cmd in deno yt-dlp ffmpeg whisper-cli node pnpm tolmach; do
+    for cmd in yt-dlp ffmpeg whisper-cli claude; do
         command -v "$cmd" &>/dev/null && {
             print_success "$cmd"
         } || {
@@ -282,8 +271,8 @@ print_next_steps() {
     echo -e "${COLOR_YELLOW}Run:${COLOR_RESET}"
     echo "  tolmach https://www.youtube.com/watch?v=VIDEO_ID"
     echo ""
-    echo -e "${COLOR_YELLOW}Or with --no-llm:${COLOR_RESET}"
-    echo "  tolmach --no-llm https://www.youtube.com/watch?v=VIDEO_ID"
+    echo -e "${COLOR_YELLOW}Or directly in Claude Code:${COLOR_RESET}"
+    echo "  claude \"/tolmach https://www.youtube.com/watch?v=VIDEO_ID\""
 }
 
 print_failure() {
@@ -295,16 +284,13 @@ print_failure() {
 execute_full_install() {
     check_macos
     ensure_homebrew
-    install_deno
+    ensure_claude_code
     install_ytdlp
     install_ffmpeg
     install_whisper_cli
     download_whisper_model
-    ensure_node
-    ensure_pnpm
-    install_project_dependencies
-    build_and_link
-    create_env_file
+    verify_skill
+    install_shell_function
     create_tolmach_directories
     verify_installation && print_next_steps || print_failure $?
 }
@@ -312,7 +298,7 @@ execute_full_install() {
 execute_deps_only() {
     check_macos
     ensure_homebrew
-    install_deno
+    ensure_claude_code
     install_ytdlp
     install_ffmpeg
     install_whisper_cli
@@ -330,7 +316,7 @@ execute_check() {
         print_success "All dependencies available"
     } || {
         echo ""
-        print_error "Some dependencies missing. Run: pnpm setup"
+        print_error "Some dependencies missing. Run: ./tools/setup.sh"
     }
 }
 
