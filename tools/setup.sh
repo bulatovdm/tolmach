@@ -223,7 +223,9 @@ install_shell_function() {
 # tolmach
 tolmach() {
   if [ -z "\$1" ]; then
-    echo "Usage: tolmach <video-url-or-path>"
+    echo "Usage: tolmach [--transcript] <url-or-file-path>"
+    echo "  <url-or-file-path>  YouTube/Vimeo URL, video file or audio file"
+    echo "  --transcript        Clean full transcript instead of an analytical report"
     return 1
   fi
   cd "$tolmach_dir" && claude --model claude-sonnet-4-5-20250929 "/tolmach \$*"
