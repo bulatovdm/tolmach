@@ -65,7 +65,7 @@ claude "/tolmach https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 tolmach <url>
     ↓
-claude --model claude-sonnet-4-5 "/tolmach <url>"
+claude --model claude-sonnet-5 "/tolmach <url>"
     ↓
 Claude Code запускает скилл:
   1. yt-dlp / ffmpeg → извлекает аудио в ~/.tolmach/tmp/
