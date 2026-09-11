@@ -228,7 +228,7 @@ tolmach() {
     echo "  --transcript        Clean full transcript instead of an analytical report"
     return 1
   fi
-  cd "$tolmach_dir" && claude --model claude-sonnet-4-5-20250929 "/tolmach \$*"
+  cd "$tolmach_dir" && claude --model claude-sonnet-5 "/tolmach \$*"
 }
 SHELL_FUNC
 
